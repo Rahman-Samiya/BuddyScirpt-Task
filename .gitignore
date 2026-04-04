@@ -1,0 +1,38 @@
+# =========================
+# Root-level ignores
+# =========================
+# macOS
+.DS_Store
+
+# Node modules & logs in frontend
+/frontend/node_modules/
+/frontend/build/
+/frontend/.env
+/frontend/.DS_Store
+/frontend/npm-debug.log*
+/frontend/yarn-debug.log*
+/frontend/yarn-error.log*
+
+# Laravel / server folder
+/server/vendor/
+/server/node_modules/
+/server/.env
+/server/.phpunit.result.cache
+/server/storage/*.key
+/server/storage/framework/cache/data/*
+/server/storage/logs/*
+/server/storage/app/public/*
+/server/bootstrap/cache/*.php
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Optional: npm debug log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log**
