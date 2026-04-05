@@ -26,7 +26,7 @@ BuddyScript is a lightweight social feed app with a Next.js frontend and a Larav
 1. Backend setup
 
 ```bash
-cd server
+cd backend
 composer install
 cp .env.example .env
 php artisan key:generate
