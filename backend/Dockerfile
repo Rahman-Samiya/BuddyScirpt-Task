@@ -11,32 +11,39 @@ RUN apt-get update && apt-get install -y \
     libonig-dev \
     libxml2-dev \
     libpng-dev \
-    libonig-dev \
     libpq-dev
 
-# Install PHP extensions
-RUN docker-php-ext-install pdo pdo_mysql mbstring zip exif pcntl bcmath
+# Install PHP extensions (IMPORTANT: add pgsql)
+RUN docker-php-ext-install \
+    pdo \
+    pdo_mysql \
+    pdo_pgsql \
+    mbstring \
+    zip \
+    exif \
+    pcntl \
+    bcmath
 
-# Install Composer globally
+# Install Composer
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 # Set working directory
 WORKDIR /var/www/html
 
-# Copy project files
+# Copy files
 COPY . .
 
-# Install PHP dependencies
+# Install dependencies
 RUN composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader
 
-# Set permissions
+# Permissions
 RUN chmod -R 777 storage bootstrap/cache
 
-# Create the storage symlink
+# Storage link
 RUN php artisan storage:link
 
-# Expose port (Laravel will run on $PORT from Railway)
-EXPOSE 8000
+# Expose port
+EXPOSE 10000
 
-# Run migrations and start server
+# Start app (Render provides PORT env)
 CMD php artisan migrate --force && php artisan serve --host=0.0.0.0 --port=${PORT}
