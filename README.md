@@ -44,7 +44,7 @@ http://localhost:8000/api
 2. Frontend setup
 
 ```bash
-cd front
+cd frontend
 npm install
 cp .env.example .env
 npm run dev
@@ -57,7 +57,7 @@ http://localhost:3000
 ```
 
 **Environment Variables**
-Frontend (`front/.env`):
+Frontend (`frontend/.env`):
 
 - `NEXT_PUBLIC_API_BASE_URL` (example: `http://127.0.0.1:8000/api`)
 - `NEXT_PUBLIC_LARAVEL_APP_BASE_URL`
@@ -65,7 +65,7 @@ Frontend (`front/.env`):
 - `NEXT_PUBLIC_APP_NAME`
 - `NEXT_PUBLIC_APP_VERSION`
 
-Backend (`server/.env`):
+Backend (`backend/.env`):
 
 - `DB_CONNECTION`
 - `DB_HOST`
@@ -75,14 +75,14 @@ Backend (`server/.env`):
 - `DB_PASSWORD`
 
 **Useful Scripts**
-Frontend (`front`):
+Frontend (`frontend`):
 
 - `npm run dev`
 - `npm run build`
 - `npm run start`
 - `npm run lint`
 
-Backend (`server`):
+Backend (`backend`):
 
 - `composer run setup`
 - `composer run dev`
@@ -90,5 +90,5 @@ Backend (`server`):
 
 **Docs**
 
-- Frontend details: `front/README.md`
-- Backend API details: `server/README.md`
+- Frontend details: `frontend/README.md`
+- Backend API details: `backend/README.md`
