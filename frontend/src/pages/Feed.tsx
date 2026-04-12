@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useCallback, useState } from 'react';
 import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
-import { Virtuoso } from 'react-virtuoso';
+import { Virtuoso } from "react-virtuoso";
 import {
   FeedHeader,
   MobileMenu,
@@ -239,12 +239,12 @@ export default function Feed() {
                     <Virtuoso
                       key={scrollParent ? 'feed-scroll-parent' : 'feed-self-scroll'}
                       data={posts}
+                      computeItemKey={(index, post) => post.id}  // ✅ correct prop name
                       overscan={200}
                       customScrollParent={scrollParent ?? undefined}
                       style={{ height: 'auto' }}
                       itemContent={(_, post: Post) => (
                         <TimelinePost
-                          key={post.id}
                           post={post}
                           onPostUpdate={handlePostUpdate}
                           onPostDelete={handlePostDelete}
