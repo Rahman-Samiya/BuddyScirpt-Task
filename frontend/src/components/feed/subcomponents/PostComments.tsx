@@ -24,6 +24,8 @@ export const PostComments = forwardRef<PostCommentsRef, PostCommentsProps>(({ po
   const [replyingTo, setReplyingTo] = useState<{ id: number; author: string; content: string } | null>(null);
   const [showAllComments, setShowAllComments] = useState(false);
 
+  const commentsCache = useRef<{ [key: number]: Comment[] }>({});
+  
   useImperativeHandle(ref, () => ({
     focusCommentInput: () => {
       commentInputRef.current?.focus();
@@ -70,10 +72,17 @@ export const PostComments = forwardRef<PostCommentsRef, PostCommentsProps>(({ po
   };
 
   const fetchComments = async () => {
+    if (commentsCache.current[postId]) {
+      setComments(commentsCache.current[postId]);
+      return;
+    }
+    
     setLoading(true);
     try {
       const res = await commentService.getCommentsByPost(postId);
-      setComments(res.comments || []);
+      const data = res.comments || [];
+      commentsCache.current[postId] = data;   // ✅ cache
+      setComments(data);
     } catch (error) {
       console.error('Error fetching comments:', error);
     }
