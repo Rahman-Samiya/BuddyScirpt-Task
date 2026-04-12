@@ -14,22 +14,23 @@ export interface PostCommentsRef {
   focusCommentInput: () => void;
 }
 
+const commentsCache: { [key: number]: Comment[] } = {};
+const inFlight = new Set<number>()
+
 export const PostComments = forwardRef<PostCommentsRef, PostCommentsProps>(({ postId, onCommentCountChange }, ref) => {
   const { user } = useAuth();
   const commentInputRef = useRef<HTMLTextAreaElement>(null);
 
-  const [comments, setComments] = useState<Comment[]>([]);
+  const [comments, setComments] = useState<Comment[]>(
+    () => commentsCache[postId] ?? []  // ✅ Initialize from cache immediately
+  );
   const [loading, setLoading] = useState(false);
   const [commentContent, setCommentContent] = useState('');
   const [replyingTo, setReplyingTo] = useState<{ id: number; author: string; content: string } | null>(null);
   const [showAllComments, setShowAllComments] = useState(false);
 
-  const commentsCache = useRef<{ [key: number]: Comment[] }>({});
-  
   useImperativeHandle(ref, () => ({
-    focusCommentInput: () => {
-      commentInputRef.current?.focus();
-    }
+    focusCommentInput: () => commentInputRef.current?.focus(),
   }));
 
   // Fetch comments on mount
@@ -37,56 +38,63 @@ export const PostComments = forwardRef<PostCommentsRef, PostCommentsProps>(({ po
     fetchComments();
   }, [postId]);
 
-  // Listen for focus event from PostStats
+  // Focus event listener
   useEffect(() => {
     const handleFocusEvent = (event: CustomEvent) => {
-      const { postId: eventPostId } = event.detail;
-      if (eventPostId === postId) {
+      if (event.detail.postId === postId) {
         commentInputRef.current?.focus();
       }
     };
-
     window.addEventListener('focusCommentInput', handleFocusEvent as EventListener);
-
-    return () => {
-      window.removeEventListener('focusCommentInput', handleFocusEvent as EventListener);
-    };
+    return () => window.removeEventListener('focusCommentInput', handleFocusEvent as EventListener);
   }, [postId]);
 
-  // Update comment count when comments change
+  // ✅ Stable ref for onCommentCountChange to avoid re-triggering the effect
+  const onCommentCountChangeRef = useRef(onCommentCountChange);
+  useEffect(() => {
+    onCommentCountChangeRef.current = onCommentCountChange;
+  });
+
+  // ✅ Only dispatch when comments actually change, use ref for callback
   useEffect(() => {
     const totalComments = getTotalCommentCount(comments);
-    onCommentCountChange?.(totalComments);
-    // Dispatch custom event for PostStats to listen
-    window.dispatchEvent(new CustomEvent('commentCountUpdate', { detail: { postId, count: totalComments } }));
-  }, [comments, onCommentCountChange, postId]);
+    onCommentCountChangeRef.current?.(totalComments);
+    window.dispatchEvent(
+      new CustomEvent('commentCountUpdate', { detail: { postId, count: totalComments } })
+    );
+  }, [comments, postId]); // removed onCommentCountChange from deps
 
   const getTotalCommentCount = (comments: Comment[]): number => {
     let count = comments.length;
     for (const comment of comments) {
-      if (comment.replies) {
-        count += getTotalCommentCount(comment.replies);
-      }
+      if (comment.replies) count += getTotalCommentCount(comment.replies);
     }
     return count;
   };
 
   const fetchComments = async () => {
-    if (commentsCache.current[postId]) {
-      setComments(commentsCache.current[postId]);
+    // ✅ Return cached data immediately
+    if (commentsCache[postId]) {
+      setComments(commentsCache[postId]);
       return;
     }
-    
+
+    // ✅ Deduplicate in-flight requests for the same postId
+    if (inFlight.has(postId)) return;
+    inFlight.add(postId);
+
     setLoading(true);
     try {
       const res = await commentService.getCommentsByPost(postId);
       const data = res.comments || [];
-      commentsCache.current[postId] = data;   // ✅ cache
+      commentsCache[postId] = data;
       setComments(data);
     } catch (error) {
       console.error('Error fetching comments:', error);
+    } finally {
+      inFlight.delete(postId);
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const handleCreateComment = async (e: React.FormEvent) => {
