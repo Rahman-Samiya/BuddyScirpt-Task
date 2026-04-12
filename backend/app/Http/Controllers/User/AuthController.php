@@ -11,10 +11,12 @@ class AuthController extends Controller
 {
     public function register(AuthRegisterRequest $request)
     {
+        $email = strtolower(trim($request->email));
+
         $user = User::create([
             'first_name' => $request->first_name,
             'last_name' => $request->last_name,
-            'email' => $request->email,
+            'email' => $email,
             'password' => Hash::make($request->password),
         ]);
 
@@ -40,7 +42,11 @@ class AuthController extends Controller
             'password' => 'required'
         ]);
 
-        $user = User::where('email', $request->email)->first();
+        $email = strtolower(trim($request->email));
+        $user = User::query()
+            ->select(['id', 'first_name', 'last_name', 'email', 'password'])
+            ->where('email', $email)
+            ->first();
 
         if (!$user || !Hash::check($request->password, $user->password)) {
             return response()->json(['message' => 'Wrong credentials'], 401);
