@@ -20,17 +20,8 @@ class AuthController extends Controller
 
         // Create a Sanctum token for the user
         $token = $user->createToken('auth_token')->plainTextToken;
-
-        return response()->json([
-            'message' => 'Registered successfully',
-            'user' => [
-                'id' => $user->id,
-                'first_name' => $user->first_name,
-                'last_name' => $user->last_name,
-                'email' => $user->email,
-            ],
-            'token' => $token
-        ], 201);
+        $message = 'Registered successfully';
+        return $this->responseSenatize($message, $user, $token);
     }
 
     public function login(Request $request)
@@ -48,17 +39,20 @@ class AuthController extends Controller
 
         // Create a Sanctum token for the user
         $token = $user->createToken('auth_token')->plainTextToken;
+        $message = 'Logged in successfully';
+        return $this->responseSenatize($message,$user, $token);
+    }
 
+    private function responseSenatize($message, $user, $token)
+    {
         return response()->json([
-            'message' => 'Logged in successfully',
+            'message' => $message,
             'user' => [
-                'id' => $user->id,
                 'first_name' => $user->first_name,
                 'last_name' => $user->last_name,
-                'email' => $user->email,
             ],
             'token' => $token
-        ]);
+        ], 200);
     }
 
     public function logout(Request $request)
