@@ -51,9 +51,9 @@ class Comment extends Model
         return $this->hasMany(self::class, 'parent_id')
             ->with([
                 'replies',      // recursive infinite depth
-                'user',
-                'likes.user'
-            ]);
+                'user:id,first_name,last_name',
+            ])
+            ->withCount('likes');
     }
 
     // Comment can be liked
