@@ -75,6 +75,6 @@ class Post extends Model
     {
         return $query
             ->with(['user', 'likes.user'])
-            ->withCount('likes');
+            ->withCount(['likes', 'allComments as comments_count']);
     }
 }
