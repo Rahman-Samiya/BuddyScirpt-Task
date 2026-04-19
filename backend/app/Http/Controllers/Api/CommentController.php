@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\Comment\CommentResource;
 use App\Services\CommentService;
 use App\Models\Comment\Comment;
 use Illuminate\Http\Request;
@@ -24,7 +25,10 @@ class CommentController extends Controller
     {
         try {
             $commentsPayload = $this->commentsService->getCommentsByPost($postId);
-            return response()->json($commentsPayload);
+            return response()->json([
+                'post_id' => $commentsPayload['post_id'],
+                'comments' => CommentResource::collection($commentsPayload['comments']),
+            ]);
         } catch (\Exception $e) {
             Log::error('Error fetching comments: ' . $e->getMessage());
             return response()->json(['error' => 'Failed to fetch comments'], 500);
@@ -51,7 +55,7 @@ class CommentController extends Controller
 
             return response()->json([
                 'message' => 'Comment added',
-                'comment' => $comment
+                'comment' => new CommentResource($comment)
             ], 201);
         } catch (\Exception $e) {
             Log::error('Error creating comment: ' . $e->getMessage());
@@ -86,7 +90,7 @@ class CommentController extends Controller
 
             return response()->json([
                 'message' => 'Comment updated successfully',
-                'comment' => $updatedComment
+                'comment' => new CommentResource($updatedComment)
             ]);
         } catch (\Exception $e) {
             Log::error('Error updating comment: ' . $e->getMessage());

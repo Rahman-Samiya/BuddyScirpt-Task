@@ -17,16 +17,12 @@ class CommentService
         $comments = $post->comments()
             ->whereNull('parent_id')
             ->with([
-                'replies',          // recursive, unlimited depth
-                'user',
-                'likes.user'
+                'replies',
+                'user:id,first_name,last_name',
             ])
+            ->withCount('likes')
             ->orderBy('created_at', 'desc')
-            ->get()
-            ->map(function ($comment) {
-                $comment->likes_count = $comment->likes->count();
-                return $comment;
-            });
+            ->get();
 
         return [
             'post_id' => $post->id,
@@ -48,8 +44,9 @@ class CommentService
             'parent_id' => $parentId,
         ]);
 
-        $comment = $comment->load(['user', 'likes.user']);
-        $comment->likes_count = $comment->likes->count();
+        $comment = $comment
+            ->load(['user:id,first_name,last_name', 'replies'])
+            ->loadCount('likes');
 
         return $comment;
     }
@@ -62,8 +59,9 @@ class CommentService
         $comment->content = $content;
         $comment->save();
 
-        $comment = $comment->load(['user', 'likes.user']);
-        $comment->likes_count = $comment->likes->count();
+        $comment = $comment
+            ->load(['user:id,first_name,last_name', 'replies'])
+            ->loadCount('likes');
 
         return $comment;
     }
