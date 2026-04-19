@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\Like\LikeResource;
 use App\Models\Post\Post;
 use App\Models\Comment\Comment;
 use Illuminate\Http\Request;
@@ -14,12 +15,11 @@ class LikeController extends Controller
         $model = $type === 'post' ? Post::class : Comment::class;
         $likeable = $model::findOrFail($id);
 
-        // Get all likes with users
-        $likes = $likeable->likes()->with('user')->get();
+        $likes = $likeable->likes()->with('user:id,first_name,last_name')->get();
 
         return response()->json([
             'count' => $likes->count(),
-            'users' => $likes->map(fn($like) => $like->user)
+            'likes' => LikeResource::collection($likes)
         ]);
     }
 
@@ -49,13 +49,12 @@ class LikeController extends Controller
             ]);
         }
 
-        // Return updated like info
-        $likes = $likeable->likes()->with('user')->get();
+        $likes = $likeable->likes()->with('user:id,first_name,last_name')->get();
 
         return response()->json([
             'liked' => $likeable->likes()->where('user_id', $user->id)->exists(),
             'count' => $likes->count(),
-            'users' => $likes->map(fn($like) => $like->user)
+            'likes' => LikeResource::collection($likes)
         ]);
     }
 
