@@ -3,28 +3,29 @@
 namespace App\Services;
 
 use App\Models\Post\Post;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\Storage;
 
 class PostService
 {
     public function showAllPosts($request, $perPage = 10)
     {
-        $query = Post::query();
+        $query = Post::select('id', 'user_id', 'content', 'image', 'visibility', 'created_at')
+        ->when(!$request->user(), 
+            fn($q) => $q->where('visibility', 'public'),
+            fn($q) => $q->where(fn($sub) => 
+                $sub->where('visibility', 'public')->orWhere('user_id', $request->user()->id)
+            )
+        );
 
-        if (!$request->user()) {
-            $query->where('visibility', 'public');
-        } else {
-            $query->where(function ($q) use ($request) {
-                $q->where('visibility', 'public')
-                  ->orWhere('user_id', $request->user()->id);
-            });
-        }
-
-        return $query
-            ->with(['user', 'likes.user'])
-            ->withCount('likes')
+        $data = $query
+            ->with(['user' => function ($q) {
+                $q->select('id','first_name', 'last_name');
+            }])
+            ->withCount(['likes', 'allComments as comments_count'])
             ->latest()
             ->paginate($perPage);
+        return $data;
     }
 
     public function createPost($request)
@@ -44,17 +45,27 @@ class PostService
 
     public function getPostById($id)
     {
-        return Post::query()
-            ->with(['user', 'likes.user'])
-            ->withCount('likes')
+        $post = Post::query()
+            ->with(['user' => function ($q) {
+                $q->select('id', 'first_name', 'last_name');
+            }, 'likes.user'])
+            ->withCount(['likes', 'allComments as comments_count'])
             ->findOrFail($id);
+
+        if ($post->visibility === 'private' && auth()->id() !== $post->user_id) {
+            throw new AuthorizationException('Unauthorized');
+        }
+
+        return $post;
     }
 
     public function getPostsByUser($userId, $perPage = 10)
     {
         return Post::where('user_id', $userId)
-            ->with(['user', 'likes.user'])
-            ->withCount('likes')
+            ->with(['user' => function ($q) {
+                $q->select('id', 'first_name', 'last_name');
+            }, 'likes.user'])
+            ->withCount(['likes', 'allComments as comments_count'])
             ->latest()
             ->paginate($perPage);
     }

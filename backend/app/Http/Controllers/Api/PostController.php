@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Post\PostCreateRequest;
 use App\Http\Requests\Post\PostUpdateRequest;
+use App\Http\Resources\Post\PostResource;
 use App\Services\PostService;
 use Illuminate\Http\Request;
 
@@ -25,8 +26,7 @@ class PostController extends Controller
         $page = $request->query('page', 1);
 
         $posts = $this->postService->showAllPosts($request, $perPage);
-
-        return response()->json($posts);
+        return PostResource::collection($posts);
     }
 
     /**
@@ -41,11 +41,9 @@ class PostController extends Controller
         }
 
         $perPage = $request->query('per_page', 10);
-        $page = $request->query('page', 1);
-
         $posts = $this->postService->getPostsByUser($userId, $perPage);
 
-        return response()->json($posts);
+        return PostResource::collection($posts);
     }
 
     /**
@@ -57,7 +55,9 @@ class PostController extends Controller
 
         return response()->json([
             'message' => 'Post created!',
-            'post' => $post->load('user')
+            'post' => new PostResource(
+                $post->loadCount(['likes', 'allComments as comments_count'])->load('user')
+            )
         ], 201);
     }
 
@@ -68,7 +68,7 @@ class PostController extends Controller
     {
         $post = $this->postService->getPostById($id);
 
-        return response()->json($post);
+        return new PostResource($post);
     }
 
     /**
@@ -80,7 +80,9 @@ class PostController extends Controller
 
         return response()->json([
             'message' => 'Post updated!',
-            'post' => $post->load('user')
+            'post' => new PostResource(
+                $post->loadCount(['likes', 'allComments as comments_count'])->load('user')
+            )
         ]);
     }
 
