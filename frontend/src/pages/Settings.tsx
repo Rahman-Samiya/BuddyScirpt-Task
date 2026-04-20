@@ -3,12 +3,13 @@
 import { useState } from 'react';
 import { FeedHeader, MobileMenu, MobileBottomNav, LeftSidebar, RightSidebar } from '../components/feed';
 import { useAuth } from '../contexts/AuthContext';
+import { useTheme } from '../contexts/ThemeContext';
 import { validatePassword, validateRequired } from '../utils/RegistrationValidation';
 import { userService } from '../services/userService';
 
 export default function Settings() {
   const { user } = useAuth();
-  const [darkMode, setDarkMode] = useState(false);
+  const { isDark: darkMode, toggleDark: toggleDarkMode } = useTheme();
   const [activeTab, setActiveTab] = useState<'profile' | 'password'>('profile');
   
   // Profile form state
@@ -28,10 +29,6 @@ export default function Settings() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
-
-  const toggleDarkMode = () => {
-    setDarkMode(!darkMode);
-  };
 
   const handleProfileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
