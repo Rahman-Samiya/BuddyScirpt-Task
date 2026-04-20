@@ -17,6 +17,9 @@ class PostResource extends JsonResource
         return [
             'id' => $this->id,
             'is_owner' => $request->user()?->id === $this->user_id,
+            'is_liked' => $request->user()
+                ? (bool) ($this->is_liked ?? $this->likes()->where('user_id', $request->user()->id)->exists())
+                : false,
             'user' => [
                 'first_name' => $this->user->first_name,
                 'last_name' => $this->user->last_name,
