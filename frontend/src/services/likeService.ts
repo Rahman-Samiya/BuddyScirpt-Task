@@ -36,32 +36,25 @@ api.interceptors.response.use(
 const getToken = () => (typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null);
 
 export interface LikeUser {
-  id: number;
   first_name: string;
   last_name: string;
-  email?: string;
 }
 
 export interface Like {
   id: number;
-  user_id: number;
-  post_id?: number;
-  comment_id?: number;
   created_at: string;
   user: LikeUser;
 }
 
 export interface LikeResponse {
   count: number;
-  likes?: Like[];
-  users?: LikeUser[];
+  likes: Like[];
   liked: boolean;
 }
 
 export interface LikesListResponse {
   count: number;
-  users: LikeUser[];
-  likes?: Like[];
+  likes: Like[];
 }
 
 class LikeService {
