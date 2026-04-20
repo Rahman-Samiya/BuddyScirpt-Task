@@ -30,18 +30,12 @@ class PostController extends Controller
     }
 
     /**
-     * Get all posts by a specific user (both private and public)
+     * Get the authenticated user's own posts (uses token — no user ID in URL)
      */
-    public function getPostsByUser(Request $request, $userId)
+    public function getMyPosts(Request $request)
     {
-        // Check if the authenticated user is requesting their own posts or is an admin
-        // For now, allow authenticated users to see their own posts
-        if (auth()->id() !== (int)$userId) {
-            return response()->json(['error' => 'Unauthorized'], 403);
-        }
-
         $perPage = $request->query('per_page', 10);
-        $posts = $this->postService->getPostsByUser($userId, $perPage);
+        $posts = $this->postService->getPostsByUser(auth()->id(), $perPage);
 
         return PostResource::collection($posts);
     }
