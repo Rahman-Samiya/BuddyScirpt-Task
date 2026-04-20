@@ -23,7 +23,11 @@ class PostService
                 $q->select('id','first_name', 'last_name');
             }])
             ->withCount(['likes', 'allComments as comments_count'])
-            ->latest()
+            ->when($request->user(), fn($q) => $q->withExists([
+                'likes as is_liked' => fn($sub) => $sub->where('user_id', $request->user()->id)
+            ]))
+            ->orderBy('created_at', 'desc')
+            ->orderBy('id', 'desc')
             ->paginate($perPage);
         return $data;
     }
@@ -64,9 +68,13 @@ class PostService
         return Post::where('user_id', $userId)
             ->with(['user' => function ($q) {
                 $q->select('id', 'first_name', 'last_name');
-            }, 'likes.user'])
+            }])
             ->withCount(['likes', 'allComments as comments_count'])
-            ->latest()
+            ->withExists([
+                'likes as is_liked' => fn($sub) => $sub->where('user_id', auth()->id())
+            ])
+            ->orderBy('created_at', 'desc')
+            ->orderBy('id', 'desc')
             ->paginate($perPage);
     }
 
