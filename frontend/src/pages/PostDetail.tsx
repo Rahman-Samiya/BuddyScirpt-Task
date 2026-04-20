@@ -14,7 +14,6 @@ import {
 } from '../components/feed';
 import { postService } from '../services/postService';
 import type { Post } from '../services/postService';
-import { useAuth } from '../contexts/AuthContext';
 
 export default function PostDetail() {
   const [darkMode, setDarkMode] = useState(false);
@@ -23,7 +22,6 @@ export default function PostDetail() {
   const [error, setError] = useState<string | null>(null);
   const params = useParams();
   const id = typeof params?.id === 'string' ? params.id : Array.isArray(params?.id) ? params?.id?.[0] : undefined;
-  const { user } = useAuth();
   const router = useRouter();
 
   const toggleDarkMode = () => setDarkMode(!darkMode);
@@ -38,13 +36,6 @@ export default function PostDetail() {
 
       try {
         const fetchedPost = await postService.getPost(parseInt(id));
-
-        // Check visibility permissions
-        if (fetchedPost.visibility === 'private' && fetchedPost.user_id !== user?.id) {
-          setError('This post is private and you do not have permission to view it.');
-          return;
-        }
-
         setPost(fetchedPost);
       } catch (err) {
         console.error('Failed to fetch post:', err);
@@ -55,7 +46,7 @@ export default function PostDetail() {
     };
 
     fetchPost();
-  }, [id, user?.id]);
+  }, [id]);
 
   // When post is updated
   const handlePostUpdate = (updatedPost: Post) => {

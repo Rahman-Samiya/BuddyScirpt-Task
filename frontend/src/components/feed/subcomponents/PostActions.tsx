@@ -9,9 +9,10 @@ interface PostActionsProps {
   post: Post;
   onPostUpdate?: (updatedPost: Post) => void;
   onCommentClick?: () => void;
+  setcommentsVisible: (visible: boolean) => void;
 }
 
-export function PostActions({ post, onPostUpdate, onCommentClick }: PostActionsProps) {
+export function PostActions({ post, onPostUpdate, onCommentClick, setCommentsVisible }: PostActionsProps) {
   const { user } = useAuth();
 
   const [liked, setLiked] = useState(false);
@@ -78,6 +79,7 @@ export function PostActions({ post, onPostUpdate, onCommentClick }: PostActionsP
     onCommentClick?.();
     // Dispatch custom event for PostComments to listen, with post ID
     window.dispatchEvent(new CustomEvent('focusCommentInput', { detail: { postId: post.id } }));
+    setCommentsVisible(true);
   };
 
   const handleShare = async () => {

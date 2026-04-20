@@ -1,4 +1,3 @@
-import { executionAsyncId } from 'async_hooks';
 import axios from 'axios';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? '';
@@ -34,17 +33,15 @@ api.interceptors.response.use(
 );
 interface Post {
   id: number;
-  user_id: number;
+  is_owner: boolean;
   content: string;
   image?: string;
   visibility: 'public' | 'private';
   created_at: string;
   updated_at: string;
   user?: {
-    id: number;
     first_name: string;
     last_name: string;
-    email: string;
   };
   likes_count?: number;
   likes?: Array<{
@@ -73,27 +70,51 @@ export interface UpdatePostData {
   remove_image?: boolean;
 }
 
+interface PaginatedPostResponse {
+  data: Post[];
+  current_page: number;
+  last_page: number;
+}
+
+interface PaginatedPostsPayload {
+  data?: Post[];
+  current_page?: number;
+  last_page?: number;
+  meta?: {
+    current_page?: number;
+    last_page?: number;
+  };
+}
+
+function normalizePaginatedPostsResponse(payload: PaginatedPostsPayload): PaginatedPostResponse {
+  return {
+    data: Array.isArray(payload?.data) ? payload.data : [],
+    current_page: payload?.current_page ?? payload?.meta?.current_page ?? 1,
+    last_page: payload?.last_page ?? payload?.meta?.last_page ?? 1,
+  };
+}
+
 export const postService = {
   // Get all posts
   async getAllPosts(): Promise<Post[]> {
     const response = await api.get('/posts');
-    return response.data;
+    return Array.isArray(response.data?.data) ? response.data.data : [];
   },
 
   // Get paginated posts
-  async getPostsPaginated(page = 1, perPage = 10): Promise<{ data: Post[], current_page: number, last_page: number }> {
+  async getPostsPaginated(page = 1, perPage = 10): Promise<PaginatedPostResponse> {
       const response = await api.get('/posts', {
           params: { page, per_page: perPage }
       });
-      return response.data;
+      return normalizePaginatedPostsResponse(response.data);
   },
 
   // Get paginated posts by user (for current user's own posts)
-  async getPostsByUser(userId: number, page = 1, perPage = 10): Promise<{ data: Post[], current_page: number, last_page: number }> {
+  async getPostsByUser(userId: number, page = 1, perPage = 10): Promise<PaginatedPostResponse> {
       const response = await api.get(`/posts/user/${userId}`, {
           params: { page, per_page: perPage }
       });
-      return response.data;
+      return normalizePaginatedPostsResponse(response.data);
   },
   // Create a new post
   async createPost(data: CreatePostData): Promise<{ message: string; post: Post }> {
