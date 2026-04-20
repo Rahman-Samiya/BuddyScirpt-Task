@@ -34,6 +34,7 @@ api.interceptors.response.use(
 interface Post {
   id: number;
   is_owner: boolean;
+  is_liked?: boolean;
   content: string;
   image?: string;
   visibility: 'public' | 'private';
@@ -44,14 +45,15 @@ interface Post {
     last_name: string;
   };
   likes_count?: number;
+  comments_count?: number;
   likes?: Array<{
     id: number;
-    user_id: number;
-    user?: {
+    user: {
       id: number;
       first_name: string;
       last_name: string;
     };
+    created_at?: string;
   }>;
 }
 
@@ -109,9 +111,9 @@ export const postService = {
       return normalizePaginatedPostsResponse(response.data);
   },
 
-  // Get paginated posts by user (for current user's own posts)
-  async getPostsByUser(userId: number, page = 1, perPage = 10): Promise<PaginatedPostResponse> {
-      const response = await api.get(`/posts/user/${userId}`, {
+  // Get the authenticated user's own posts (token-identified, no user ID in URL)
+  async getMyPosts(page = 1, perPage = 10): Promise<PaginatedPostResponse> {
+      const response = await api.get('/posts/me', {
           params: { page, per_page: perPage }
       });
       return normalizePaginatedPostsResponse(response.data);
