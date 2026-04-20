@@ -14,17 +14,16 @@ import {
 } from '../components/feed';
 import { postService } from '../services/postService';
 import type { Post } from '../services/postService';
+import { useTheme } from '../contexts/ThemeContext';
 
 export default function PostDetail() {
-  const [darkMode, setDarkMode] = useState(false);
+  const { isDark: darkMode, toggleDark: toggleDarkMode } = useTheme();
   const [post, setPost] = useState<Post | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const params = useParams();
   const id = typeof params?.id === 'string' ? params.id : Array.isArray(params?.id) ? params?.id?.[0] : undefined;
   const router = useRouter();
-
-  const toggleDarkMode = () => setDarkMode(!darkMode);
 
   // Fetch single post
   useEffect(() => {
