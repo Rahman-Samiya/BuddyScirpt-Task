@@ -14,13 +14,24 @@ class CommentService
     {
         $post = Post::findOrFail($postId);
 
+        $userId = auth()->id();
+
         $comments = $post->comments()
             ->whereNull('parent_id')
             ->with([
-                'replies',
+                'replies' => function ($q) use ($userId) {
+                    $q->with('user:id,first_name,last_name')
+                      ->withCount('likes')
+                      ->when($userId, fn($r) => $r->withExists([
+                          'likes as is_liked' => fn($sub) => $sub->where('user_id', $userId)
+                      ]));
+                },
                 'user:id,first_name,last_name',
             ])
             ->withCount('likes')
+            ->when($userId, fn($q) => $q->withExists([
+                'likes as is_liked' => fn($sub) => $sub->where('user_id', $userId)
+            ]))
             ->orderBy('created_at', 'desc')
             ->get();
 
