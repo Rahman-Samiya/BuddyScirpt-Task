@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import Link from 'next/link';
 import { useAuth } from '../../../contexts/AuthContext';
 import commentService, { type Comment, type CommentUser } from '../../../services/commentService';
 import Swal from 'sweetalert2';
@@ -23,35 +22,45 @@ export function CommentItem({
 }: CommentItemProps) {
   const { user } = useAuth();
 
-  const [liked, setLiked] = useState(false);
-  const [likesCount, setLikesCount] = useState(0);
+  const [liked, setLiked] = useState(comment.is_liked ?? false);
+  const [likesCount, setLikesCount] = useState(comment.likes_count ?? 0);
   const [likeUsers, setLikeUsers] = useState<CommentUser[]>([]);
+  const [likeModalLoading, setLikeModalLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(comment.content);
   const [showLikeModal, setShowLikeModal] = useState(false);
   const [showReplies, setShowReplies] = useState(false);
 
-  // Initialize likes
   useEffect(() => {
-    setLikesCount(comment.likes_count || comment.likes?.length || 0);
-
-    if (comment.likes && Array.isArray(comment.likes)) {
-      const users = comment.likes.map((l) => l.user || l);
-      setLikeUsers(users);
-      const userLiked = comment.likes.some((l) => (l.user_id || l.id) === user?.id);
-      setLiked(userLiked);
-    } else {
-      setLiked(false);
-      setLikeUsers([]);
-    }
-  }, [comment.id, comment.likes, comment.likes_count, user?.id]);
+    setLikesCount(comment.likes_count ?? 0);
+    setLiked(comment.is_liked ?? false);
+  }, [comment.id, comment.is_liked, comment.likes_count]);
 
   // Avatar utilities
   const getAvatarChar = (firstName: string) => firstName?.charAt(0).toUpperCase() || '?';
 
   const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E2'];
-  const getAvatarColor = (userId: number) => colors[userId % colors.length];
+  const getAvatarColor = (name: string) => {
+    let hash = 0;
+    for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+    return colors[Math.abs(hash) % colors.length];
+  };
+
+  const handleOpenLikeModal = async () => {
+    setShowLikeModal(true);
+    if (likeUsers.length === 0 && likesCount > 0) {
+      setLikeModalLoading(true);
+      try {
+        const res = await commentService.getCommentLikes(comment.id);
+        setLikeUsers((res.likes || []).map((l) => l.user).filter(Boolean) as CommentUser[]);
+      } catch (e) {
+        console.error('Error fetching comment likes:', e);
+      } finally {
+        setLikeModalLoading(false);
+      }
+    }
+  };
 
   const handleLike = async () => {
     if (!user || loading) return;
@@ -67,18 +76,13 @@ export function CommentItem({
 
       setLiked(res.liked);
       setLikesCount(res.count);
-      setLikeUsers(res.users || []);
+      setLikeUsers((res.likes || []).map((l) => l.user).filter(Boolean) as CommentUser[]);
 
       onCommentUpdate?.({
         ...comment,
+        is_liked: res.liked,
         likes_count: res.count,
-        likes: res.users?.map((u: any) => ({
-          id: u.id,
-          user_id: u.id,
-          comment_id: comment.id,
-          created_at: new Date().toISOString(),
-          user: u,
-        })) || [],
+        likes: res.likes || [],
       });
     } catch (error) {
       console.error('Like error:', error);
@@ -149,42 +153,39 @@ export function CommentItem({
     return `${diffDays}d`;
   };
 
-  const isCommentAuthor = user?.id === comment.user_id;
+  const isCommentAuthor = comment.is_owner;
 
   return (
     <div className="_comment_main">
       <div className="_comment_image">
-        <Link href={`/profile/${comment.user_id}`} className="_comment_image_link">
+        <div className="_comment_image_link">
           <div
             className="_avatar_circle"
             style={{
               width: '32px',
               height: '32px',
               borderRadius: '50%',
-              backgroundColor: getAvatarColor(comment.user_id),
+              backgroundColor: getAvatarColor(comment.user.first_name + comment.user.last_name),
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               color: 'white',
               fontSize: '14px',
               fontWeight: 'bold',
-              cursor: 'pointer',
             }}
           >
             {getAvatarChar(comment.user.first_name)}
           </div>
-        </Link>
+        </div>
       </div>
 
       <div className="_comment_area">
         <div className="_comment_details">
           <div className="_comment_details_top">
             <div className="_comment_name">
-              <Link href={`/profile/${comment.user_id}`}>
-                <h4 className="_comment_name_title">
-                  {comment.user.first_name} {comment.user.last_name}
-                </h4>
-              </Link>
+              <h4 className="_comment_name_title">
+                {comment.user.first_name} {comment.user.last_name}
+              </h4>
             </div>
           </div>
 
@@ -310,7 +311,7 @@ export function CommentItem({
             <div className="_total_react">
               {likesCount > 0 && (
                 <button
-                  onClick={() => setShowLikeModal(true)}
+                  onClick={handleOpenLikeModal}
                   style={{
                     border: 'none',
                     background: 'none',
@@ -464,26 +465,23 @@ export function CommentItem({
             onClick={(e) => e.stopPropagation()}
           >
             <h5 style={{ marginBottom: '16px' }}>People who liked this</h5>
+            {likeModalLoading ? (
+              <p style={{ textAlign: 'center', color: '#999', padding: '12px 0' }}>Loading...</p>
+            ) : likeUsers.length === 0 ? (
+              <p style={{ textAlign: 'center', color: '#999', padding: '12px 0' }}>No reactions yet</p>
+            ) : null}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              {likeUsers.map((user) => (
-                <Link
-                  key={user.id}
-                  href={`/profile/${user.id}`}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    textDecoration: 'none',
-                    color: 'inherit',
-                  }}
-                  onClick={() => setShowLikeModal(false)}
+              {!likeModalLoading && likeUsers.map((likeUser, idx) => (
+                <div
+                  key={`${likeUser.first_name}-${likeUser.last_name}-${idx}`}
+                  style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
                 >
                   <div
                     style={{
                       width: '32px',
                       height: '32px',
                       borderRadius: '50%',
-                      backgroundColor: getAvatarColor(user.id),
+                      backgroundColor: getAvatarColor(likeUser.first_name + likeUser.last_name),
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
@@ -493,14 +491,12 @@ export function CommentItem({
                       flexShrink: 0,
                     }}
                   >
-                    {getAvatarChar(user.first_name)}
+                    {getAvatarChar(likeUser.first_name)}
                   </div>
-                  <div>
-                    <p style={{ margin: 0, fontWeight: 500 }}>
-                      {user.first_name} {user.last_name}
-                    </p>
-                  </div>
-                </Link>
+                  <p style={{ margin: 0, fontWeight: 500 }}>
+                    {likeUser.first_name} {likeUser.last_name}
+                  </p>
+                </div>
               ))}
             </div>
             <button
