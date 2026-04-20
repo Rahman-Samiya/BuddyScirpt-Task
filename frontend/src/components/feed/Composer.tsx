@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef } from 'react';
+import axios from 'axios';
 import Swal from 'sweetalert2';
 import { postService } from '../../services/postService';
 import type { Post } from '../../services/postService';
@@ -147,23 +148,19 @@ export default function Composer({ onPostCreated }: ComposerProps) {
       if (response.post) {
         const postData = {
           id: response.post.id,
+          is_owner: response.post.is_owner ?? true,
           content: response.post.content,
           visibility: response.post.visibility,
           created_at: response.post.created_at,
           updated_at: response.post.updated_at,
-          user_id: response.post.user_id,
           user: response.post.user
             ? {
-                id: response.post.user.id,
                 first_name: response.post.user.first_name,
                 last_name: response.post.user.last_name,
-                email: response.post.user.email,
               }
             : {
-                id: 0,
                 first_name: 'Unknown',
                 last_name: 'User',
-                email: '',
               },
           image: response.post.image || undefined,
         };
@@ -172,12 +169,16 @@ export default function Composer({ onPostCreated }: ComposerProps) {
         onPostCreated?.(postData);
       }
 
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const message = axios.isAxiosError(err)
+        ? err.response?.data?.message || 'Failed to create post'
+        : 'Failed to create post';
+
       Swal.fire({
         toast: true,
         position: 'top-end',
         icon: 'error',
-        title: err.response?.data?.message || 'Failed to create post',
+        title: message,
         showConfirmButton: false,
         timer: 5000,
         timerProgressBar: true,
