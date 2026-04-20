@@ -4,47 +4,53 @@ import { useState, useEffect } from "react";
 import { likeService } from "../../../services/likeService";
 
 interface LikeUser {
-  id: number;
   first_name: string;
   last_name: string;
 }
 
 interface PostStatsProps {
   post: any;
-  commentCount?: number;
   onCommentClick?: () => void;
   postId?: number;
 }
 
-export function PostStats({ post, commentCount: initialCommentCount = 0, onCommentClick, postId }: PostStatsProps) {
+export function PostStats({ post, onCommentClick, postId }: PostStatsProps) {
   const [modalOpen, setModalOpen] = useState(false);
   const [likeUsers, setLikeUsers] = useState<LikeUser[]>([]);
   const [loading, setLoading] = useState(false);
-  const [commentCount, setCommentCount] = useState(initialCommentCount);
+  const [commentCount, setCommentCount] = useState<number>(post.comments_count ?? 0);
+
+  // Sync when the cached post object is updated (e.g. after a new comment)
+  useEffect(() => {
+    if (post.comments_count !== undefined) {
+      setCommentCount(post.comments_count);
+    }
+  }, [post.comments_count]);
 
   // Get first character of user's first name for avatar
   const getAvatarChar = (firstName: string): string => {
     return firstName?.charAt(0).toUpperCase() || '?';
   };
 
-  // Get avatar background color based on user id
-  const getAvatarColor = (userId: number): string => {
+  const getAvatarColor = (name: string): string => {
     const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E2'];
-    return colors[userId % colors.length];
+    let hash = 0;
+    for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+    return colors[Math.abs(hash) % colors.length];
   };
 
   const openModal = async () => {
-    if (modalOpen) return; // Already open, don't fetch again
-    
+    if (modalOpen) return;
+
     try {
       setLoading(true);
       const res = await likeService.getLikes("post", post.id);
-      setLikeUsers(res.users || res || []);
+      setLikeUsers((res.likes || []).map((l) => l.user).filter(Boolean));
       setModalOpen(true);
     } catch (error) {
       console.error("Error loading like users", error);
       setLikeUsers([]);
-      setModalOpen(true); // Open modal anyway to show empty state
+      setModalOpen(true);
     } finally {
       setLoading(false);
     }
@@ -54,12 +60,9 @@ export function PostStats({ post, commentCount: initialCommentCount = 0, onComme
     setModalOpen(false);
   };
 
-  // Update likeUsers when post changes
   useEffect(() => {
     if (post.likes && Array.isArray(post.likes)) {
-      // Handle both data structures
-      const users = post.likes.map((l: any) => l.user || l);
-      setLikeUsers(users);
+      setLikeUsers(post.likes.map((l: any) => l.user).filter(Boolean));
     } else {
       setLikeUsers([]);
     }
@@ -97,12 +100,12 @@ export function PostStats({ post, commentCount: initialCommentCount = 0, onComme
             {likeUsers.length > 0 ? (
               likeUsers.slice(0, 5).map((user, idx) => (
                 <div
-                  key={user.id}
+                  key={`${user.first_name}-${user.last_name}-${idx}`}
                   style={{
                     width: "28px",
                     height: "28px",
                     borderRadius: "50%",
-                    background: getAvatarColor(user.id),
+                    background: getAvatarColor(user.first_name + user.last_name),
                     color: "#fff",
                     display: "flex",
                     alignItems: "center",
@@ -209,9 +212,9 @@ export function PostStats({ post, commentCount: initialCommentCount = 0, onComme
               <p style={{ textAlign: "center", color: "#999", padding: "20px 0" }}>No reactions yet</p>
             ) : (
               <div>
-                {likeUsers.map((user) => (
+                {likeUsers.map((user, idx) => (
                   <div
-                    key={user.id}
+                    key={`${user.first_name}-${user.last_name}-${idx}`}
                     style={{
                       display: "flex",
                       alignItems: "center",
@@ -225,7 +228,7 @@ export function PostStats({ post, commentCount: initialCommentCount = 0, onComme
                         width: "40px",
                         height: "40px",
                         borderRadius: "50%",
-                        background: getAvatarColor(user.id),
+                        background: getAvatarColor(user.first_name + user.last_name),
                         color: "#fff",
                         display: "flex",
                         alignItems: "center",

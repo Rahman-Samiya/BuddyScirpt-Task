@@ -9,7 +9,7 @@ interface PostActionsProps {
   post: Post;
   onPostUpdate?: (updatedPost: Post) => void;
   onCommentClick?: () => void;
-  setcommentsVisible: (visible: boolean) => void;
+  setCommentsVisible: (visible: boolean) => void;
 }
 
 export function PostActions({ post, onPostUpdate, onCommentClick, setCommentsVisible }: PostActionsProps) {
@@ -19,20 +19,10 @@ export function PostActions({ post, onPostUpdate, onCommentClick, setCommentsVis
   const [likesCount, setLikesCount] = useState(0);
   const [loading, setLoading] = useState(false);
 
-  // Load initial values
   useEffect(() => {
-    // initial like count
     setLikesCount(post.likes_count || 0);
-
-    // initial users list and check if user liked
-    if (post.likes && Array.isArray(post.likes)) {
-      // Handle both data structures: { user: {} } and direct user objects
-      const userLiked = post.likes.some((l) => (l.user_id || l.id) === user?.id);
-      setLiked(userLiked);
-    } else {
-      setLiked(false);
-    }
-  }, [post.id, post.likes, post.likes_count, user?.id]);
+    setLiked(post.is_liked ?? false);
+  }, [post.id, post.is_liked, post.likes_count]);
 
   const handleLike = async () => {
     if (!user || loading) return;
@@ -55,13 +45,8 @@ export function PostActions({ post, onPostUpdate, onCommentClick, setCommentsVis
       onPostUpdate?.({
         ...post,
         likes_count: res.count,
-        likes: res.users?.map((u: any) => ({
-          id: u.id,
-          user_id: u.id,
-          post_id: post.id,
-          created_at: new Date().toISOString(),
-          user: u
-        })) || []
+        is_liked: res.liked,
+        likes: res.likes || [],
       });
 
     } catch (error) {
