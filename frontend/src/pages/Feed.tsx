@@ -17,6 +17,7 @@ import {
 import { postService } from '../services/postService';
 import type { Post } from '../services/postService';
 import { useAuth } from '../contexts/AuthContext';
+import { useTheme } from '../contexts/ThemeContext';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -35,9 +36,6 @@ const GC_TIME_MS     = 5 * 60_000;
 
 // ─── Pure helpers (outside component — never re-created) ─────────────────────
 
-/**
- * Immutably update a matching post across all paginated pages.
- */
 function updatePostInPages(
   pages: PostsPage[],
   predicate: (p: Post) => boolean,
@@ -49,10 +47,6 @@ function updatePostInPages(
   }));
 }
 
-/**
- * Client-side visibility fallback.
- * Prefer server-side filtering; this is a non-destructive safety net only.
- */
 function isPostVisible(post: Post): boolean {
   if (post.visibility === 'public') return true;
   if (post.visibility === 'private' && post.is_owner) return true;
@@ -75,42 +69,26 @@ function PostSkeleton() {
 export default function Feed() {
   const { user }    = useAuth();
   const queryClient = useQueryClient();
+  const { isDark, toggleDark } = useTheme();
 
-  // ── UI state ──
-  const [isDark, setIsDark] = useState(false);
+  // ── Scroll container ref (the _layout_middle_wrap div is the actual scroller) ─
+  const [scrollParent, setScrollParent] = useState<HTMLElement | null>(null);
 
-  // ── Scroll container ──
-  const [scrollParent, setScrollParent]       = useState<HTMLElement | null>(null);
-  const [hasUserScrolled, setHasUserScrolled] = useState(false);
+  // ── Scroll gate: prevent endReached from firing before any user scroll ────────
+  const scrolledOnce = useRef(false);
 
-  // ── Pagination gate ──────────────────────────────────────────────────────────
-  // hasReachedEnd is set to true ONLY when Virtuoso's atBottomStateChange fires.
-  // The sentinel <div> that triggers fetchNextPage is NOT in the DOM until then,
-  // so the IntersectionObserver cannot fire prematurely on page load.
-  const [hasReachedEnd, setHasReachedEnd] = useState(false);
-
-  // ── Refs ──
-  const observerRef = useRef<IntersectionObserver | null>(null);
-  const sentinelRef = useRef<HTMLDivElement | null>(null);
-
-  // ── Scroll container ref callback ──
-  const middleWrapRef = useCallback((node: HTMLDivElement | null) => {
-    setScrollParent(node);
-  }, []);
+  useEffect(() => {
+    if (!scrollParent) return;
+    const onScroll = () => { if (scrollParent.scrollTop > 0) scrolledOnce.current = true; };
+    scrollParent.addEventListener('scroll', onScroll, { passive: true });
+    return () => scrollParent.removeEventListener('scroll', onScroll);
+  }, [scrollParent]);
 
   // ── Query key ──
   const queryKey = useMemo(
     () => ['posts', user?.id, { visibility: 'list' }] as const,
     [user?.id],
   );
-
-  // ─── Dark mode ──────────────────────────────────────────────────────────────
-
-  useEffect(() => {
-    const root = document.documentElement;
-    if (isDark) root.classList.add('theme--dark');
-    else root.classList.remove('theme--dark');
-  }, [isDark]);
 
   // ─── Data fetching ──────────────────────────────────────────────────────────
 
@@ -146,57 +124,21 @@ export default function Feed() {
     retryDelay: (i) => Math.min(1000 * 2 ** i, 30_000),
   });
 
-  // Flatten pages → single array for Virtuoso
-  const posts = useMemo(
-    () => (data ? data.pages.flatMap((page) => page.data) : []),
-    [data],
-  );
-
-  // ─── Reset gate whenever a new page arrives ─────────────────────────────────
-  // After page 2 loads, hasReachedEnd resets to false. This removes the sentinel
-  // from the DOM and forces the user to scroll to the new bottom before page 3
-  // is fetched. The cycle repeats for every subsequent page.
-
+  // Reset scroll gate whenever a new page arrives
   useEffect(() => {
-    setHasReachedEnd(false);
+    scrolledOnce.current = false;
   }, [data?.pages.length]);
 
-  // ─── Scroll listener ────────────────────────────────────────────────────────
-
-  useEffect(() => {
-    if (!scrollParent) return;
-    const onScroll = () => {
-      if (scrollParent.scrollTop > 0) setHasUserScrolled(true);
-    };
-    scrollParent.addEventListener('scroll', onScroll, { passive: true });
-    return () => scrollParent.removeEventListener('scroll', onScroll);
-  }, [scrollParent]);
-
-  // ─── IntersectionObserver on sentinel ──────────────────────────────────────
-  // Runs only after hasReachedEnd flips to true (sentinel is in the DOM).
-
-  useEffect(() => {
-    observerRef.current?.disconnect();
-
-    const sentinel = sentinelRef.current;
-    if (!sentinel || !scrollParent || !hasNextPage || !hasReachedEnd) return;
-
-    observerRef.current = new IntersectionObserver(
-      ([entry]) => {
-        if (entry?.isIntersecting && !isFetchingNextPage) {
-          fetchNextPage();
-        }
-      },
-      {
-        root: scrollParent,
-        rootMargin: '0px',
-        threshold: 1.0,
-      },
-    );
-
-    observerRef.current.observe(sentinel);
-    return () => observerRef.current?.disconnect();
-  }, [scrollParent, hasNextPage, hasReachedEnd, isFetchingNextPage, fetchNextPage]);
+  // Flatten pages → single array, deduplicating by id
+  const posts = useMemo(() => {
+    if (!data) return [];
+    const seen = new Set<number>();
+    return data.pages.flatMap((page) => page.data).filter((post) => {
+      if (seen.has(post.id)) return false;
+      seen.add(post.id);
+      return true;
+    });
+  }, [data]);
 
   // ─── Cache helpers ──────────────────────────────────────────────────────────
 
@@ -251,18 +193,18 @@ export default function Feed() {
   // ─── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <div className="_layout _layout_main_wrapper">
+    <div className={`_layout _layout_main_wrapper${isDark ? ' _dark_wrapper' : ''}`}>
 
       {/* Dark mode toggle */}
-      <div className="_layout_mode_switching_btn">
+      <div className="_layout_mode_swithing_btn">
         <button
           type="button"
-          className="_layout_switching_btn_link"
-          onClick={() => setIsDark((d) => !d)}
+          className="_layout_swithing_btn_link"
+          onClick={toggleDark}
           aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
         >
-          <div className="_layout_switching_btn">
-            <div className="_layout_switching_btn_round" />
+          <div className="_layout_swithing_btn">
+            <div className="_layout_swithing_btn_round" />
           </div>
         </button>
       </div>
@@ -285,7 +227,7 @@ export default function Feed() {
               <div className="col-xl-6 col-lg-6 col-md-12 col-sm-12">
                 <div
                   className="_layout_middle_wrap _layout_middle_wrap--feed"
-                  ref={middleWrapRef}
+                  ref={setScrollParent}
                 >
                   <div className="_layout_middle_inner">
                     <StoriesDesktop />
@@ -317,20 +259,13 @@ export default function Feed() {
                       </div>
                     )}
 
-                    {/* ── Virtualized post list ─────────────────────────────
-                        atBottomStateChange fires `true` only when the user has
-                        scrolled to the very last item in the current list.
-                        That is the moment we flip hasReachedEnd → true, which
-                        mounts the sentinel and unlocks the next-page fetch.
-                    ──────────────────────────────────────────────────────── */}
                     {!isLoading && posts.length > 0 && (
                       <Virtuoso
-                        key={scrollParent ? 'feed-scroll-parent' : 'feed-self-scroll'}
+                        customScrollParent={scrollParent ?? undefined}
                         data={posts}
                         computeItemKey={(_index, post) => post.id}
-                        overscan={200}
-                        customScrollParent={scrollParent ?? undefined}
-                        style={{ height: 'auto' }}
+                        increaseViewportBy={400}
+                        style={{ width: '100%' }}
                         itemContent={(_index, post: Post) => (
                           <TimelinePost
                             post={post}
@@ -338,27 +273,11 @@ export default function Feed() {
                             onPostDelete={handlePostDelete}
                           />
                         )}
-                        atBottomStateChange={(atBottom) => {
-                          // Gate: user must have scrolled AND be at the bottom
-                          if (atBottom && hasUserScrolled && hasNextPage) {
-                            setHasReachedEnd(true);
+                        endReached={() => {
+                          if (hasNextPage && !isFetchingNextPage && scrolledOnce.current) {
+                            fetchNextPage();
                           }
                         }}
-                      />
-                    )}
-
-                    {/* ── Sentinel ─────────────────────────────────────────
-                        Only mounted once the user has scrolled to the bottom
-                        of the current page (hasReachedEnd === true).
-                        IntersectionObserver watches it → calls fetchNextPage.
-                        After each new page loads, hasReachedEnd resets to false,
-                        removing this element until the user scrolls down again.
-                    ──────────────────────────────────────────────────────── */}
-                    {hasNextPage && hasReachedEnd && (
-                      <div
-                        ref={sentinelRef}
-                        style={{ height: 1, width: '100%' }}
-                        aria-hidden="true"
                       />
                     )}
 
