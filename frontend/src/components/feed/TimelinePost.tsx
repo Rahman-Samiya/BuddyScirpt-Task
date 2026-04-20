@@ -1,6 +1,5 @@
 "use client";
 
-import { useAuth } from "../../contexts/AuthContext";
 import type { Post } from "../../services/postService";
 import { PostHeader } from "./subcomponents/PostHeader";
 import { PostContent } from "./subcomponents/PostContent";
@@ -8,6 +7,7 @@ import { PostStats } from "./subcomponents/PostStats";
 import { PostActions } from "./subcomponents/PostActions";
 import { PostComments } from "./subcomponents/PostComments";
 import { showEditPostModal } from "./subcomponents/EditPostModal";
+import { useState } from "react";
 
 interface TimelinePostProps {
   post: Post;
@@ -16,9 +16,8 @@ interface TimelinePostProps {
 }
 
 export default function TimelinePost({ post, onPostUpdate, onPostDelete }: TimelinePostProps) {
-  const { user } = useAuth();
-
-  const isOwner = user?.id === post.user_id;
+  const isOwner = post.is_owner;
+  const [isCommentsVisible, setCommentsVisible] = useState(false);
 
   const handleEdit = async () => {
     await showEditPostModal({
@@ -52,10 +51,12 @@ export default function TimelinePost({ post, onPostUpdate, onPostDelete }: Timel
       <PostStats post={post} />
 
       {/* Post Actions */}
-      <PostActions post={post} onPostUpdate={onPostUpdate} />
+      <PostActions post={post} onPostUpdate={onPostUpdate} setCommentsVisible={setCommentsVisible} />
 
       {/* Post Comments */}
-      <PostComments postId={post.id} />
+      { isCommentsVisible && (
+        <PostComments postId={post.id} />
+      ) }
     </div>
   );
 }
