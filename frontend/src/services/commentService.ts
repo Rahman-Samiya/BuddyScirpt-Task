@@ -36,24 +36,20 @@ const getToken = () => (typeof window !== 'undefined' ? localStorage.getItem('au
 
 // Types
 export interface CommentUser {
-  id: number;
   first_name: string;
   last_name: string;
-  email?: string;
 }
 
 export interface CommentLike {
   id: number;
-  user_id: number;
-  comment_id: number;
   created_at: string;
   user: CommentUser;
 }
 
 export interface Comment {
   id: number;
-  post_id: number;
-  user_id: number;
+  is_owner: boolean;
+  is_liked?: boolean;
   parent_id?: number | null;
   content: string;
   created_at: string;
@@ -77,13 +73,12 @@ export interface CommentsListResponse {
 export interface CommentLikeResponse {
   count: number;
   liked: boolean;
-  users: CommentUser[];
-  likes?: CommentLike[];
+  likes: CommentLike[];
 }
 
 export interface CommentLikesListResponse {
   count: number;
-  users: CommentUser[];
+  likes: CommentLike[];
 }
 
 // Service methods
@@ -208,7 +203,7 @@ const commentService = {
     try {
       const token = getToken();
       const response = await api.get(
-        `/likes/comment/${commentId}`,
+        `/like/comment/${commentId}`,
         {
           headers: token ? { 'Authorization': `Bearer ${token}` } : {},
         }
