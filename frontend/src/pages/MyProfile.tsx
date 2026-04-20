@@ -1,6 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback } from 'react';
+import { useEffect, useMemo, useCallback, useRef, useState } from 'react';
+import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
+import { Virtuoso } from 'react-virtuoso';
 import {
   FeedHeader,
   MobileMenu,
@@ -12,101 +14,127 @@ import {
 import { postService } from '../services/postService';
 import type { Post } from '../services/postService';
 import { useAuth } from '../contexts/AuthContext';
+import { useTheme } from '../contexts/ThemeContext';
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const POSTS_PER_PAGE = 10;
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+type PostsPage = Awaited<ReturnType<typeof postService.getMyPosts>>;
+type PostsInfiniteData = { pages: PostsPage[]; pageParams: number[] };
+
+// ─── Component ───────────────────────────────────────────────────────────────
 
 export default function MyProfile() {
-  const [darkMode, setDarkMode] = useState(false);
-  const [posts, setPosts] = useState<Post[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [hasMore, setHasMore] = useState(true);
-  const [page, setPage] = useState(1);
-  const { user } = useAuth();
-  console.log(user)
-  const toggleDarkMode = () => setDarkMode(!darkMode);
+  const { user }    = useAuth();
+  const queryClient = useQueryClient();
+  const { isDark, toggleDark } = useTheme();
 
-  // Fetch current user's posts with pagination
-  const fetchUserPosts = useCallback(
-    async (append: boolean = false) => {
-      if (!user || loading || !hasMore) return;
+  // ── Scroll container ref (_layout_middle_wrap is the actual scroller) ─────────
+  const [scrollParent, setScrollParent] = useState<HTMLElement | null>(null);
 
-      setLoading(true);
-      try {
-        const res = await postService.getPostsByUser(user.id, page, 30);
+  // ── Scroll gate: prevent endReached from firing before any user scroll ────────
+  const scrolledOnce = useRef(false);
 
-        // Handle both paginated and array responses
-        const postsData = res.data || res;
-        const currentPage = res.current_page || 1;
-        const lastPage = res.last_page || 1;
+  useEffect(() => {
+    if (!scrollParent) return;
+    const onScroll = () => { if (scrollParent.scrollTop > 0) scrolledOnce.current = true; };
+    scrollParent.addEventListener('scroll', onScroll, { passive: true });
+    return () => scrollParent.removeEventListener('scroll', onScroll);
+  }, [scrollParent]);
 
-        if (append) {
-          setPosts(prev => [...prev, ...(Array.isArray(postsData) ? postsData : [])]);
-        } else {
-          setPosts(Array.isArray(postsData) ? postsData : []);
-        }
+  // ── Query ────────────────────────────────────────────────────────────────────
+  const queryKey = useMemo(() => ['user-posts'] as const, []);
 
-        // Check if more pages exist
-        setHasMore(currentPage < lastPage);
-      } catch (error) {
-        console.error('Failed to fetch user posts:', error);
-        // Set empty posts on error
-        if (!append) {
-          setPosts([]);
-        }
-      } finally {
-        setLoading(false);
-      }
+  const {
+    data,
+    isLoading,
+    isError,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    refetch,
+  } = useInfiniteQuery({
+    queryKey,
+    queryFn: async ({ pageParam = 1 }: { pageParam?: number }) => {
+      const res = await postService.getMyPosts(pageParam, POSTS_PER_PAGE);
+      return { ...res, _page: pageParam };
     },
-    [user, loading, page, hasMore]
-  );
+    initialPageParam: 1,
+    getNextPageParam: (lastPage) =>
+      lastPage.current_page < lastPage.last_page
+        ? lastPage.current_page + 1
+        : undefined,
+    enabled: !!user,
+    staleTime: 30_000,
+    gcTime:    5 * 60_000,
+    refetchOnWindowFocus: false,
+    retry: 2,
+    retryDelay: (i) => Math.min(1000 * 2 ** i, 30_000),
+  });
 
-  // Scroll handler for infinite scroll
-  const handleScroll = useCallback(() => {
-    if (loading || !hasMore) return;
-
-    const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-    const windowHeight = window.innerHeight;
-    const documentHeight = document.documentElement.scrollHeight;
-
-    if (scrollTop + windowHeight >= documentHeight - 100) {
-      setPage(prev => prev + 1);
-    }
-  }, [loading, hasMore]);
-
-  // Fetch posts on page change
+  // Reset scroll gate whenever a new page arrives
   useEffect(() => {
-    fetchUserPosts(page > 1);
-  }, [page, fetchUserPosts]);
+    scrolledOnce.current = false;
+  }, [data?.pages.length]);
 
-  // Initial fetch
-  useEffect(() => {
-    fetchUserPosts(false);
-  }, [user?.id]);
+  // Flatten + deduplicate by id
+  const posts = useMemo(() => {
+    if (!data) return [];
+    const seen = new Set<number>();
+    return data.pages.flatMap((page) => page.data).filter((post) => {
+      if (seen.has(post.id)) return false;
+      seen.add(post.id);
+      return true;
+    });
+  }, [data]);
 
-  // Add scroll event listener
-  useEffect(() => {
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, [handleScroll]);
+  // ── Cache helpers ────────────────────────────────────────────────────────────
 
-  // When post is updated
   const handlePostUpdate = useCallback((updatedPost: Post) => {
-    setPosts(prev => prev.map(post =>
-      post.id === updatedPost.id ? updatedPost : post
-    ));
-  }, []);
+    queryClient.setQueryData<PostsInfiniteData>(queryKey, (old) => {
+      if (!old) return old;
+      return {
+        ...old,
+        pages: old.pages.map((page) => ({
+          ...page,
+          data: page.data.map((p) => (p.id === updatedPost.id ? updatedPost : p)),
+        })),
+      };
+    });
+  }, [queryClient, queryKey]);
 
-  // When post is deleted
   const handlePostDelete = useCallback((postId: number) => {
-    setPosts(prev => prev.filter(post => post.id !== postId));
-  }, []);
+    queryClient.setQueryData<PostsInfiniteData>(queryKey, (old) => {
+      if (!old) return old;
+      return {
+        ...old,
+        pages: old.pages.map((page) => ({
+          ...page,
+          data: page.data.filter((p) => p.id !== postId),
+        })),
+      };
+    });
+  }, [queryClient, queryKey]);
+
+  // ─── Render ──────────────────────────────────────────────────────────────────
 
   return (
-    <div className={`_layout _layout_main_wrapper ${darkMode ? '_dark_wrapper' : ''}`}>
+    <div className={`_layout _layout_main_wrapper${isDark ? ' _dark_wrapper' : ''}`}>
+
+      {/* Dark mode toggle */}
       <div className="_layout_mode_swithing_btn">
-        <button type="button" className="_layout_swithing_btn_link" onClick={toggleDarkMode}>
+        <button
+          type="button"
+          className="_layout_swithing_btn_link"
+          onClick={toggleDark}
+          aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+        >
           <div className="_layout_swithing_btn">
-            <div className="_layout_swithing_btn_round"></div>
+            <div className="_layout_swithing_btn_round" />
           </div>
-          {/* Your dark/light mode SVGs */}
         </button>
       </div>
 
@@ -118,14 +146,20 @@ export default function MyProfile() {
         <div className="container _custom_container">
           <div className="_layout_inner_wrap">
             <div className="row">
+
               <div className="col-xl-3 col-lg-3 col-md-12 col-sm-12">
                 <LeftSidebar />
               </div>
 
               <div className="col-xl-6 col-lg-6 col-md-12 col-sm-12">
-                <div className="_layout_middle_wrap">
+                {/* --feed modifier sets _layout_middle_inner height to auto so posts aren't clipped */}
+                <div
+                  className="_layout_middle_wrap _layout_middle_wrap--feed"
+                  ref={setScrollParent}
+                >
                   <div className="_layout_middle_inner">
-                    {/* User Profile Header */}
+
+                    {/* Profile header */}
                     {user && (
                       <div style={{
                         background: '#fff',
@@ -134,20 +168,19 @@ export default function MyProfile() {
                         marginBottom: '20px',
                         boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
                       }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '16px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                           <div style={{
                             width: '80px',
                             height: '80px',
                             borderRadius: '50%',
                             background: '#e0e0e0',
-                            overflow: 'hidden',
-                            flexShrink: 0,
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
                             fontSize: '32px',
                             fontWeight: 'bold',
-                            color: '#999'
+                            color: '#999',
+                            flexShrink: 0,
                           }}>
                             {user.first_name.charAt(0)}{user.last_name.charAt(0)}
                           </div>
@@ -158,7 +191,7 @@ export default function MyProfile() {
                             <p style={{ margin: '0 0 8px 0', color: '#666', fontSize: '14px' }}>
                               {user.email}
                             </p>
-                            <p style={{ margin: '0', color: '#999', fontSize: '12px' }}>
+                            <p style={{ margin: 0, color: '#999', fontSize: '12px' }}>
                               My Profile
                             </p>
                           </div>
@@ -166,41 +199,70 @@ export default function MyProfile() {
                       </div>
                     )}
 
-                    {/* Posts Section */}
-                    <div>
-                      <h3 style={{ margin: '24px 0 16px 0', fontSize: '16px', fontWeight: '600', color: '#333' }}>
-                        My Posts ({posts?.length || 0})
-                      </h3>
+                    {/* Posts count heading */}
+                    <h3 style={{ margin: '0 0 16px 0', fontSize: '16px', fontWeight: '600', color: '#333' }}>
+                      My Posts ({posts.length}{hasNextPage ? '+' : ''})
+                    </h3>
 
-                      {!posts || posts.length === 0 && !loading && (
-                        <div style={{ textAlign: 'center', padding: '40px 20px', color: '#666' }}>
-                          You haven`t posted anything yet
-                        </div>
-                      )}
+                    {/* Error state */}
+                    {isError && (
+                      <div style={{ textAlign: 'center', padding: 16 }}>
+                        <div>Failed to load posts.</div>
+                        <button onClick={() => refetch()}>Retry</button>
+                      </div>
+                    )}
 
-                      {posts.map(post => (
-                        <TimelinePost
-                          key={post.id}
-                          post={post}
-                          onPostUpdate={handlePostUpdate}
-                          onPostDelete={handlePostDelete}
-                        />
-                      ))}
+                    {/* Initial loading */}
+                    {isLoading && (
+                      <div style={{ textAlign: 'center', padding: '40px', color: '#999' }}>
+                        Loading posts...
+                      </div>
+                    )}
 
-                      {/* Loader */}
-                      {loading && posts.length > 0 && (
-                        <div style={{ textAlign: 'center', padding: '20px', color: '#666' }}>
-                          Loading more posts...
-                        </div>
-                      )}
+                    {/* Empty state */}
+                    {!isLoading && !isError && posts.length === 0 && (
+                      <div style={{ textAlign: 'center', padding: '40px 20px', color: '#666' }}>
+                        You haven't posted anything yet.
+                      </div>
+                    )}
 
-                      {/* No more posts message */}
-                      {!hasMore && posts.length > 0 && (
-                        <div style={{ textAlign: 'center', padding: '20px', color: '#666' }}>
-                          No more posts to load
-                        </div>
-                      )}
-                    </div>
+                    {/* Virtualized post list */}
+                    {!isLoading && posts.length > 0 && (
+                      <Virtuoso
+                        customScrollParent={scrollParent ?? undefined}
+                        data={posts}
+                        computeItemKey={(_index, post) => post.id}
+                        increaseViewportBy={400}
+                        style={{ width: '100%' }}
+                        itemContent={(_index, post: Post) => (
+                          <TimelinePost
+                            post={post}
+                            onPostUpdate={handlePostUpdate}
+                            onPostDelete={handlePostDelete}
+                          />
+                        )}
+                        endReached={() => {
+                          if (hasNextPage && !isFetchingNextPage && scrolledOnce.current) {
+                            fetchNextPage();
+                          }
+                        }}
+                      />
+                    )}
+
+                    {/* Pagination loading indicator */}
+                    {isFetchingNextPage && (
+                      <div style={{ textAlign: 'center', padding: '12px 0', color: '#666' }}>
+                        Loading more posts...
+                      </div>
+                    )}
+
+                    {/* End-of-feed message */}
+                    {!hasNextPage && posts.length > 0 && (
+                      <div style={{ textAlign: 'center', padding: '12px 0', color: '#666' }}>
+                        No more posts to load
+                      </div>
+                    )}
+
                   </div>
                 </div>
               </div>
@@ -208,6 +270,7 @@ export default function MyProfile() {
               <div className="col-xl-3 col-lg-3 col-md-12 col-sm-12">
                 <RightSidebar />
               </div>
+
             </div>
           </div>
         </div>
