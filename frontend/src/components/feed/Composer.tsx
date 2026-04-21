@@ -198,10 +198,10 @@ export default function Composer({ onPostCreated }: ComposerProps) {
         <div className="_feed_inner_text_area_box_image">
           <img src="/assets/images/txt_img.png" alt="Image" className="_txt_img" />
         </div>
-        <div className="form-floating _feed_inner_text_area_box_form " style={{ position: 'relative' }}>
-          <textarea 
-            className="form-control _textarea" 
-            placeholder="Write something ..." 
+        <div className="form-floating _feed_inner_text_area_box_form">
+          <textarea
+            className="form-control _textarea"
+            placeholder="Write something ..."
             id="floatingTextarea"
             value={content}
             onChange={(e) => setContent(e.target.value)}
@@ -216,20 +216,22 @@ export default function Composer({ onPostCreated }: ComposerProps) {
               </svg>
             </label>
           )}
-          
-          {/* Visibility selector */}
-          <div className="visibility-select-wrapper">
-              <select 
-                value={visibility}
-                onChange={(e) => setVisibility(e.target.value as 'public' | 'private')}
-                disabled={isSubmitting}
-                className="visibility-select"
-              >
-                <option value="public" data-icon="🌐">🌐 Public</option>
-                <option value="private" data-icon="🔒">🔒 Private</option>
-              </select>
-          </div>
         </div>
+      </div>
+
+      {/* Visibility selector — sits below the textarea, not over it */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '10px' }}>
+        <span style={{ fontSize: '13px', color: '#666' }}>Audience:</span>
+        <select
+          value={visibility}
+          onChange={(e) => setVisibility(e.target.value as 'public' | 'private')}
+          disabled={isSubmitting}
+          className="visibility-select"
+          style={{ position: 'static' }}
+        >
+          <option value="public">🌐 Public</option>
+          <option value="private">🔒 Private</option>
+        </select>
       </div>
 
       {/* Image Preview */}
