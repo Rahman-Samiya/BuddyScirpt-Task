@@ -48,7 +48,7 @@ export default function TimelinePost({ post, onPostUpdate, onPostDelete }: Timel
       </div>
 
       {/* Post Stats */}
-      <PostStats post={post} />
+      <PostStats post={post} setCommentsVisible={setCommentsVisible} />
 
       {/* Post Actions */}
       <PostActions post={post} onPostUpdate={onPostUpdate} setCommentsVisible={setCommentsVisible} />
