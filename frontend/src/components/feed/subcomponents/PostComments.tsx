@@ -41,7 +41,7 @@ export const PostComments = forwardRef<PostCommentsRef, PostCommentsProps>(({ po
   // Focus event listener
   useEffect(() => {
     const handleFocusEvent = (event: CustomEvent) => {
-      if (event.detail.postId === postId) {
+      if (event.detail?.postId === postId) {
         commentInputRef.current?.focus();
       }
     };
