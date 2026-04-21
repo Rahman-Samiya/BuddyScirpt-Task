@@ -11,10 +11,11 @@ interface LikeUser {
 interface PostStatsProps {
   post: any;
   onCommentClick?: () => void;
+  setCommentsVisible?: (visible: boolean) => void;
   postId?: number;
 }
 
-export function PostStats({ post, onCommentClick, postId }: PostStatsProps) {
+export function PostStats({ post, onCommentClick, setCommentsVisible, postId }: PostStatsProps) {
   const [modalOpen, setModalOpen] = useState(false);
   const [likeUsers, setLikeUsers] = useState<LikeUser[]>([]);
   const [loading, setLoading] = useState(false);
@@ -136,9 +137,9 @@ export function PostStats({ post, onCommentClick, postId }: PostStatsProps) {
           <p className="_feed_inner_timeline_total_reacts_para1">
             <button
               onClick={() => {
+                setCommentsVisible?.(true);
                 onCommentClick?.();
-                // Dispatch custom event for PostComments to listen
-                window.dispatchEvent(new CustomEvent('focusCommentInput'));
+                window.dispatchEvent(new CustomEvent('focusCommentInput', { detail: { postId: post.id } }));
               }}
               style={{
                 background: 'none',
